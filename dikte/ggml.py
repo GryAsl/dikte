@@ -77,6 +77,14 @@ Program = collections.namedtuple("Program", "name repo binary health")
 WHISPER = Program("whisper", "ggml-org/whisper.cpp", "whisper-server", "")
 LLAMA = Program("llama", "ggml-org/llama.cpp", "llama-server", "/health")
 
+# Windows Vulkan packages built by this fork.  The upstream repositories remain
+# the source everywhere else, so adding the Radeon path changes no existing CPU,
+# Linux or macOS install.  Both archives are attached to this fork's ordinary
+# Dikte releases by .github/workflows/vulkan-runtimes.yml.
+VULKAN_RUNTIME_REPO = "GryAsl/dikte"
+VULKAN_WHISPER_ASSET = "dikte-whisper-win-vulkan-x64.zip"
+VULKAN_LLAMA_ASSET = "dikte-llama-win-vulkan-x64.zip"
+
 # Where the models are listed. Neither list is written into Dikte: a catalogue
 # in the source means a release of Dikte for every model somebody else
 # publishes.
@@ -259,6 +267,9 @@ def _wanted_assets(program):
     if sys.platform == "darwin":
         return () if program is WHISPER else (f"bin-macos-{arch}.tar.gz",)
     if sys.platform == "win32":
+        if _has_vulkan() and arch == "x64":
+            return ((VULKAN_WHISPER_ASSET,) if program is WHISPER
+                    else (VULKAN_LLAMA_ASSET,))
         if program is WHISPER:
             # The BLAS build first: on a plain CPU it transcribes about twice
             # as fast as the stock one, and it carries everything it needs.
@@ -269,12 +280,17 @@ def _wanted_assets(program):
             # arm64 build for Windows: a Snapdragon runs this one emulated,
             # which is slow but is the only local option there is.
             return ("whisper-blas-bin-x64.zip", "whisper-bin-x64.zip")
-        if _has_vulkan() and arch == "x64":
-            return ("bin-win-vulkan-x64.zip", f"bin-win-cpu-{arch}.zip")
         return (f"bin-win-cpu-{arch}.zip",)
     if program is LLAMA and _has_vulkan():
         return (f"bin-ubuntu-vulkan-{arch}.tar.gz", f"bin-ubuntu-{arch}.tar.gz")
     return (f"bin-ubuntu-{arch}.tar.gz",)
+
+
+def _release_repo(program):
+    """The release repository that supplies this machine's program archive."""
+    if sys.platform == "win32" and _arch() == "x64" and _has_vulkan():
+        return VULKAN_RUNTIME_REPO
+    return program.repo
 
 
 def _install_record(program):
@@ -374,8 +390,9 @@ def install_program(program, tag="", on_progress=None, should_stop=None,
     a version pinned in Dikte's source would mean a release of Dikte every time
     whisper.cpp has one.
     """
+    repo = _release_repo(program)
     try:
-        tag, assets = hub.release(program.repo, tag or "latest", refresh=refresh)
+        tag, assets = hub.release(repo, tag or "latest", refresh=refresh)
     except hub.HubError as exc:
         raise LocalError(str(exc)) from exc
 
@@ -398,7 +415,7 @@ def install_program(program, tag="", on_progress=None, should_stop=None,
                 "or transcribe in the cloud. See the README."
             ))
         raise LocalError(t("{repo} {tag} has no build for this machine.",
-                           repo=program.repo, tag=tag))
+                           repo=repo, tag=tag))
 
     into = BIN_DIR / program.name / tag
     fresh = into.with_name(tag + ".new")

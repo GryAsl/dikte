@@ -120,8 +120,15 @@ jobs:
       ref: ${{ needs.version.outputs.ref }}
       version: ${{ needs.version.outputs.prerelease == 'true' && needs.version.outputs.version || '' }}
 
+  # Ready-to-run Windows Vulkan backends.  They are separate downloads rather
+  # than baked into Dikte, so the portable application stays small and its two
+  # Download buttons install only what the user chose.
+  vulkan-runtimes:
+    needs: version
+    uses: ./.github/workflows/vulkan-runtimes.yml
+
   publish:
-    needs: [version, build]
+    needs: [version, build, vulkan-runtimes]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -156,11 +163,12 @@ jobs:
           used. It asks again after an update, because an application signed with
           no certificate is one macOS has never seen before.
 
-          Windows: run the setup, which installs for your account alone and asks
-          for no administrator. It carries the ffmpeg recording needs and adds a
-          Start Menu entry, a `dikte` command and, unless you untick it, a start
-          at sign-in. It is not signed either, so SmartScreen offers only "Don't
-          run" until you press More info. Add/Remove Programs uninstalls it.
+          Windows: download the portable zip, extract it, open the `dikte` folder
+          and run `Dikte.exe`. It carries the ffmpeg recording needs. On a Vulkan
+          capable x64 machine, the program Download buttons fetch the ready-made
+          Vulkan builds of whisper.cpp and llama.cpp from this same release; no
+          compiler or Vulkan SDK is needed. The application is not signed, so
+          SmartScreen may require More info, Run anyway on first launch.
           EOF
           )
 

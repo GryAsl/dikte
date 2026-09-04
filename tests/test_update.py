@@ -72,7 +72,7 @@ class Asking(DikteTest):
         self.assertEqual(release.url, RELEASE["html_url"])
         self.assertEqual(
             calls[0].full_url,
-            "https://api.github.com/repos/yusufipk/dikte/releases/latest")
+            f"https://api.github.com/repos/{update.REPO}/releases/latest")
 
     def test_a_release_with_no_page_falls_back_to_the_redirect(self):
         with fake_urlopen({"tag_name": "v1.4.0"}):

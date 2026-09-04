@@ -1,0 +1,141 @@
+name: Vulkan runtimes
+
+# Builds only the two local servers Dikte launches.  A Radeon is not needed on
+# the runner: the Vulkan SDK compiles the backend, while the user's graphics
+# driver supplies vulkan-1.dll at runtime.
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/vulkan-runtimes.yml
+      - .github/workflows/release.yml
+      - dikte/ggml.py
+
+permissions:
+  contents: read
+
+env:
+  VULKAN_VERSION: 1.4.357.0
+  WHISPER_COMMIT: 371b5a7561823ab2bb32142d2751e35e7534727b
+  LLAMA_COMMIT: c1d0e7a004015f23bc0233470b747b596f29b264
+
+jobs:
+  windows-x64:
+    runs-on: windows-2025
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out whisper.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: ${{ env.WHISPER_COMMIT }}
+          path: whisper.cpp
+
+      - name: Check out llama.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: ${{ env.LLAMA_COMMIT }}
+          path: llama.cpp
+
+      # Same unattended SDK installation used by llama.cpp's own Windows
+      # Vulkan workflow, pinned to the SDK used for the locally verified build.
+      - name: Install Vulkan SDK
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP "VulkanSDK-Installer.exe"
+          curl.exe --fail --location --output $installer `
+            "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Vulkan SDK download failed" }
+          & $installer --accept-licenses --default-answer --confirm-command install
+          if ($LASTEXITCODE -ne 0) { throw "Vulkan SDK installation failed" }
+          "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "C:\VulkanSDK\$env:VULKAN_VERSION\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Install Ninja
+        shell: pwsh
+        run: choco install ninja --no-progress -y
+
+      - name: Configure and build whisper-server
+        shell: pwsh
+        run: |
+          cmake -S whisper.cpp -B build-whisper -G "Ninja Multi-Config" `
+            -DGGML_VULKAN=ON `
+            -DGGML_NATIVE=OFF `
+            -DWHISPER_BUILD_SERVER=ON `
+            -DWHISPER_BUILD_TESTS=OFF `
+            -DWHISPER_BUILD_EXAMPLES=ON
+          if ($LASTEXITCODE -ne 0) { throw "whisper.cpp configure failed" }
+          cmake --build build-whisper --config Release --target whisper-server --parallel
+          if ($LASTEXITCODE -ne 0) { throw "whisper-server build failed" }
+
+      - name: Configure and build llama-server
+        shell: pwsh
+        run: |
+          cmake -S llama.cpp -B build-llama -G "Ninja Multi-Config" `
+            -DGGML_VULKAN=ON `
+            -DGGML_NATIVE=OFF `
+            -DLLAMA_BUILD_SERVER=ON `
+            -DLLAMA_BUILD_TESTS=OFF `
+            -DLLAMA_BUILD_EXAMPLES=OFF `
+            -DLLAMA_BUILD_UI=OFF `
+            -DLLAMA_CURL=OFF
+          if ($LASTEXITCODE -ne 0) { throw "llama.cpp configure failed" }
+          cmake --build build-llama --config Release --target llama-server --parallel
+          if ($LASTEXITCODE -ne 0) { throw "llama-server build failed" }
+
+      - name: Package complete runtime directories
+        shell: pwsh
+        run: |
+          $out = Join-Path $PWD "runtime-dist"
+          $whisperStage = Join-Path $PWD "stage-whisper"
+          $llamaStage = Join-Path $PWD "stage-llama"
+          New-Item -ItemType Directory -Path $out, $whisperStage, $llamaStage | Out-Null
+
+          $whisperServer = Get-ChildItem build-whisper -Recurse -File -Filter whisper-server.exe | Select-Object -First 1
+          $llamaServer = Get-ChildItem build-llama -Recurse -File -Filter llama-server.exe | Select-Object -First 1
+          if (-not $whisperServer) { throw "whisper-server.exe was not produced" }
+          if (-not $llamaServer) { throw "llama-server.exe was not produced" }
+
+          Copy-Item (Join-Path $whisperServer.Directory.FullName "*") $whisperStage -Recurse
+          Copy-Item (Join-Path $llamaServer.Directory.FullName "*") $llamaStage -Recurse
+
+          foreach ($pair in @(
+            @($whisperStage, "whisper-server.exe"),
+            @($whisperStage, "ggml-vulkan.dll"),
+            @($llamaStage, "llama-server.exe"),
+            @($llamaStage, "ggml-vulkan.dll")
+          )) {
+            if (-not (Test-Path (Join-Path $pair[0] $pair[1]))) {
+              throw "$($pair[1]) is missing from $($pair[0])"
+            }
+          }
+
+          @"
+          project=ggml-org/whisper.cpp
+          commit=$env:WHISPER_COMMIT
+          backend=Vulkan
+          architecture=Windows-x64
+          "@ | Set-Content (Join-Path $whisperStage "BUILD-INFO.txt")
+          @"
+          project=ggml-org/llama.cpp
+          commit=$env:LLAMA_COMMIT
+          backend=Vulkan
+          architecture=Windows-x64
+          "@ | Set-Content (Join-Path $llamaStage "BUILD-INFO.txt")
+
+          Compress-Archive -Path (Join-Path $whisperStage "*") `
+            -DestinationPath (Join-Path $out "dikte-whisper-win-vulkan-x64.zip") `
+            -CompressionLevel Optimal
+          Compress-Archive -Path (Join-Path $llamaStage "*") `
+            -DestinationPath (Join-Path $out "dikte-llama-win-vulkan-x64.zip") `
+            -CompressionLevel Optimal
+          Get-FileHash (Join-Path $out "*.zip") -Algorithm SHA256 | Format-Table
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dikte-vulkan-runtimes-windows-x64
+          path: runtime-dist/*.zip
+          if-no-files-found: error

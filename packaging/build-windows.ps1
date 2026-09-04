@@ -1,6 +1,8 @@
 #!/usr/bin/env pwsh
-# The Windows download: one setup program, carrying everything Dikte needs to
-# record and to be started again after a sign-in.
+# The Windows download: a portable zip carrying everything Dikte needs to
+# record.  The upstream setup is still produced by default for local/reusable
+# builds; this fork's workflow sets DIKTE_PORTABLE_ONLY=1 and publishes only the
+# zip, so downloading the fork never asks somebody to run an installer.
 #
 # Run from anywhere; it works in build\ at the top of the checkout and leaves
 # the finished .exe in dist\. x64 only, because that is what the PyQt6 wheel and
@@ -92,7 +94,16 @@ $stream = New-Object System.IO.Compression.GzipStream(
 $binary = [System.IO.File]::Create((Join-Path $bin "ffmpeg.exe"))
 try { $stream.CopyTo($binary) } finally { $binary.Dispose(); $stream.Dispose(); $compressed.Dispose() }
 
-# 4. The setup program ------------------------------------------------------
+# 4. The portable download --------------------------------------------------
+$portable = Join-Path $out "Dikte-$version-x64-portable.zip"
+Compress-Archive -Path $dist -DestinationPath $portable -CompressionLevel Optimal
+
+if ($env:DIKTE_PORTABLE_ONLY -eq "1") {
+  Write-Host "dist\Dikte-$version-x64-portable.zip"
+  exit 0
+}
+
+# 5. The optional setup program ---------------------------------------------
 # Inno Setup comes with the GitHub runner. On a machine that has not got it:
 # winget install JRSoftware.InnoSetup
 $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
@@ -106,4 +117,5 @@ if (-not (Test-Path $iscc)) {
   (Join-Path $root "packaging\dikte.iss")
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
+Write-Host "dist\Dikte-$version-x64-portable.zip"
 Write-Host "dist\Dikte-$version-x64-setup.exe"

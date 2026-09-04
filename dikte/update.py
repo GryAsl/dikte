@@ -2,11 +2,11 @@
 
 GitHub is asked for the newest release, its number is held against the one this
 build carries, and that is where it stops. Nothing is downloaded and nothing is
-replaced. The four downloads are installed in four different ways, and three of
-those belong to the platform rather than to Dikte: a Mac bundle is dragged into
-Applications and cannot rewrite itself while it is running, the Windows setup
-is an installer with an uninstall entry of its own, an AppImage is a single
-file kept wherever its owner keeps it, and a checkout is updated with git. A
+replaced. The downloads are installed in different ways, and most of those
+belong to the platform rather than to Dikte: a Mac bundle is dragged into
+Applications and cannot rewrite itself while it is running, the Windows build
+is a portable folder, an AppImage is a single file kept wherever its owner
+keeps it, and a checkout is updated with git. A
 program that guessed at all four would be wrong on at least one of them, and
 being wrong there means an installation somebody has to repair by hand. So the
 answer ends in a browser, on the release page, where the same download that was
@@ -31,7 +31,10 @@ from . import __version__
 from . import hub
 from . import paths
 
-REPO = "yusufipk/dikte"
+# This build is distributed from the Vulkan fork.  Pointing its update notice
+# back at upstream would invite a user to replace it with a build that does not
+# carry the fork's Windows runtime downloads.
+REPO = "GryAsl/dikte"
 # Where somebody is sent. GitHub redirects this to whatever the newest release
 # is, so it stays right without anybody writing a number into it.
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"

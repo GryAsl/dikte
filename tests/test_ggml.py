@@ -909,6 +909,7 @@ class WindowsAssets(Local):
         super().setUp()
         self.patch_attr(sys, "platform", "win32")
         self.patch_attr(ggml, "_arch", lambda: "x64")
+        self.patch_attr(ggml, "_has_vulkan", lambda: False)
 
     def test_whisper_prefers_the_blas_build(self):
         # On a plain CPU it transcribes about twice as fast as the stock one.
@@ -918,7 +919,23 @@ class WindowsAssets(Local):
     def test_llama_takes_the_vulkan_build_when_there_is_a_loader(self):
         self.patch_attr(ggml, "_has_vulkan", lambda: True)
         self.assertEqual(ggml._wanted_assets(ggml.LLAMA),
-                         ("bin-win-vulkan-x64.zip", "bin-win-cpu-x64.zip"))
+                         (ggml.VULKAN_LLAMA_ASSET,))
+
+    def test_whisper_takes_the_vulkan_build_when_there_is_a_loader(self):
+        self.patch_attr(ggml, "_has_vulkan", lambda: True)
+        self.assertEqual(ggml._wanted_assets(ggml.WHISPER),
+                         (ggml.VULKAN_WHISPER_ASSET,))
+
+    def test_vulkan_builds_come_from_the_fork_release(self):
+        self.patch_attr(ggml, "_has_vulkan", lambda: True)
+        self.assertEqual(ggml._release_repo(ggml.WHISPER),
+                         ggml.VULKAN_RUNTIME_REPO)
+        self.assertEqual(ggml._release_repo(ggml.LLAMA),
+                         ggml.VULKAN_RUNTIME_REPO)
+
+    def test_cpu_builds_still_come_from_upstream(self):
+        self.assertEqual(ggml._release_repo(ggml.WHISPER), ggml.WHISPER.repo)
+        self.assertEqual(ggml._release_repo(ggml.LLAMA), ggml.LLAMA.repo)
 
     def test_llama_falls_back_to_the_cpu_build_without_one(self):
         self.patch_attr(ggml, "_has_vulkan", lambda: False)
@@ -948,6 +965,7 @@ class InstallOnWindows(Local):
         super().setUp()
         self.patch_attr(sys, "platform", "win32")
         self.patch_attr(ggml, "_arch", lambda: "x64")
+        self.patch_attr(ggml, "_has_vulkan", lambda: False)
         # shutil.which cannot be allowed through to the real one: standing on
         # win32 from another system, Python 3.12's Windows branch of which()
         # reaches for the nt module that is not there.
@@ -979,6 +997,16 @@ class InstallOnWindows(Local):
             ggml.install_program(ggml.WHISPER)
         urls = [call.args[0].full_url for call in calls.call_args_list]
         self.assertTrue(urls[1].endswith("whisper-blas-bin-x64.zip"))
+
+    def test_a_vulkan_machine_fetches_the_fork_archive(self):
+        self.patch_attr(ggml, "_has_vulkan", lambda: True)
+        listing = self.release(ggml.VULKAN_WHISPER_ASSET)
+        with serving(listing, self.archive) as calls:
+            path = ggml.install_program(ggml.WHISPER)
+        urls = [call.args[0].full_url for call in calls.call_args_list]
+        self.assertIn(f"/repos/{ggml.VULKAN_RUNTIME_REPO}/releases/latest", urls[0])
+        self.assertTrue(urls[1].endswith(ggml.VULKAN_WHISPER_ASSET))
+        self.assertTrue(path.endswith("whisper-server.exe"))
 
     def test_a_release_with_nothing_for_windows_says_so(self):
         with fake_urlopen(json_body(self.release("whisper-bin-ubuntu-x64.tar.gz"))):
