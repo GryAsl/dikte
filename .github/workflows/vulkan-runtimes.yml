@@ -61,20 +61,24 @@ jobs:
       - name: Configure and build whisper-server
         shell: pwsh
         run: |
-          cmake -S whisper.cpp -B build-whisper -G "Ninja Multi-Config" `
+          cmake -S whisper.cpp -B build-whisper -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=ON `
             -DGGML_VULKAN=ON `
             -DGGML_NATIVE=OFF `
             -DWHISPER_BUILD_SERVER=ON `
             -DWHISPER_BUILD_TESTS=OFF `
             -DWHISPER_BUILD_EXAMPLES=ON
           if ($LASTEXITCODE -ne 0) { throw "whisper.cpp configure failed" }
-          cmake --build build-whisper --config Release --target whisper-server --parallel
+          cmake --build build-whisper --target whisper-server --parallel
           if ($LASTEXITCODE -ne 0) { throw "whisper-server build failed" }
 
       - name: Configure and build llama-server
         shell: pwsh
         run: |
-          cmake -S llama.cpp -B build-llama -G "Ninja Multi-Config" `
+          cmake -S llama.cpp -B build-llama -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=ON `
             -DGGML_VULKAN=ON `
             -DGGML_NATIVE=OFF `
             -DLLAMA_BUILD_SERVER=ON `
@@ -83,7 +87,7 @@ jobs:
             -DLLAMA_BUILD_UI=OFF `
             -DLLAMA_CURL=OFF
           if ($LASTEXITCODE -ne 0) { throw "llama.cpp configure failed" }
-          cmake --build build-llama --config Release --target llama-server --parallel
+          cmake --build build-llama --target llama-server --parallel
           if ($LASTEXITCODE -ne 0) { throw "llama-server build failed" }
 
       - name: Package complete runtime directories
