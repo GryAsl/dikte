@@ -5,9 +5,8 @@ up and pasted where your cursor is.
 
 ## Requirements
 
-Windows 10 or 11. The setup on the [releases page](../../releases) carries
-everything else with it, and is x64, which an ARM machine runs emulated the way
-it runs whisper.cpp. A checkout wants:
+Windows 10 or 11. The portable zip on the [releases page](../../releases)
+carries everything else with it, and is x64. A checkout wants:
 
 - **Python 3.11+** with **PyQt6** (`pip install PyQt6`; install.ps1 installs
   it when it is missing)
@@ -15,15 +14,13 @@ it runs whisper.cpp. A checkout wants:
 
 ## Installing
 
-`Dikte-<version>-x64-setup.exe` from the releases page installs for your
-account alone, so no administrator is asked for, and puts down a Start Menu
-entry, a `dikte` command and, unless you untick it, a start at sign-in. It is
-signed with no certificate, so SmartScreen offers only **Don't run** until you
-press **More info**. Add/Remove Programs uninstalls it, and `dikte integrate`
-and `dikte integrate --remove` are the sign-in entry on its own, for changing
-your mind about that later. The `dikte` command is the same file install.ps1
-writes, so over a checkout the setup takes it over and uninstalling takes it
-away; run install.ps1 again to get the checkout's back.
+Download `Dikte-<version>-x64-portable.zip`, extract it, open the `dikte`
+folder and run `Dikte.exe`. Nothing is installed and no administrator is
+asked for. The application is signed with no certificate, so SmartScreen may
+require **More info** → **Run anyway** on the first launch. Dikte can add its
+own Start Menu, terminal command and start-at-sign-in entries; `dikte integrate
+--remove` removes those entries, after which the extracted folder can simply
+be deleted.
 
 From a checkout instead:
 
@@ -44,9 +41,9 @@ python -m dikte
 ## First run
 
 1. The tray icon appears and the Settings window opens.
-2. Under **API and models**, download a local whisper model (the whisper.cpp
-   Windows build is fetched automatically) or enter an OpenAI, Groq or
-   OpenRouter key.
+2. Under **API and models**, download a local whisper model. On a Vulkan-capable
+   x64 machine, the fork's ready-made Vulkan whisper.cpp package is fetched
+   automatically; no compiler or Vulkan SDK is needed.
 3. The shortcut defaults to `Ctrl+Space` and is changed under Shortcuts.
    While Dikte runs, Windows' own hotkey service (RegisterHotKey) listens for
    it: nothing to install and no permission to grant.
@@ -67,11 +64,10 @@ python -m dikte
 
 ## Performance
 
-- The local install fetches whisper.cpp's **OpenBLAS build**, which
-  transcribes about twice as fast as the stock one on a plain CPU. There is
-  no GPU build to fetch for machines without an NVIDIA card, and none for
-  Windows on ARM either: whisper.cpp publishes x64 only, so a Snapdragon
-  machine runs it under emulation and the cloud is the faster option there.
+- On Windows x64 with a Vulkan driver, the Download buttons fetch this fork's
+  Vulkan builds of whisper.cpp and llama.cpp. AMD Radeon, Intel and NVIDIA
+  Vulkan devices can use the same packages. Machines without Vulkan keep the
+  original upstream CPU download behavior.
 - Setting Settings → API and models → **Threads** near your physical core
   count helps noticeably; the server's own default is 4.
 - If speed matters more than accuracy, `ggml-small` and `ggml-base` are much
