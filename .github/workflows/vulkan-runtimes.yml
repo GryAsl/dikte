@@ -54,15 +54,10 @@ jobs:
           "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append
           "C:\VulkanSDK\$env:VULKAN_VERSION\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-      - name: Install Ninja
-        shell: pwsh
-        run: choco install ninja --no-progress -y
-
       - name: Configure and build whisper-server
         shell: pwsh
         run: |
-          cmake -S whisper.cpp -B build-whisper -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
+          cmake -S whisper.cpp -B build-whisper -G "Visual Studio 17 2022" -A x64 `
             -DBUILD_SHARED_LIBS=ON `
             -DGGML_VULKAN=ON `
             -DGGML_NATIVE=OFF `
@@ -70,14 +65,13 @@ jobs:
             -DWHISPER_BUILD_TESTS=OFF `
             -DWHISPER_BUILD_EXAMPLES=ON
           if ($LASTEXITCODE -ne 0) { throw "whisper.cpp configure failed" }
-          cmake --build build-whisper --target whisper-server --parallel
+          cmake --build build-whisper --config Release --target whisper-server --parallel
           if ($LASTEXITCODE -ne 0) { throw "whisper-server build failed" }
 
       - name: Configure and build llama-server
         shell: pwsh
         run: |
-          cmake -S llama.cpp -B build-llama -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
+          cmake -S llama.cpp -B build-llama -G "Visual Studio 17 2022" -A x64 `
             -DBUILD_SHARED_LIBS=ON `
             -DGGML_VULKAN=ON `
             -DGGML_NATIVE=OFF `
@@ -87,7 +81,7 @@ jobs:
             -DLLAMA_BUILD_UI=OFF `
             -DLLAMA_CURL=OFF
           if ($LASTEXITCODE -ne 0) { throw "llama.cpp configure failed" }
-          cmake --build build-llama --target llama-server --parallel
+          cmake --build build-llama --config Release --target llama-server --parallel
           if ($LASTEXITCODE -ne 0) { throw "llama-server build failed" }
 
       - name: Package complete runtime directories
